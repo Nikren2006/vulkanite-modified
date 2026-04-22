@@ -48,17 +48,22 @@ public class VInitializer {
     }
 
     public void findPhysicalDevice() {
-        try (MemoryStack stack = stackPush()) {
-            PointerBuffer devices = getPhysicalDevices(stack);
-            for (int i = 0; i < devices.capacity(); i++) {
-                VkPhysicalDeviceProperties props = VkPhysicalDeviceProperties.calloc(stack);
+    try (MemoryStack stack = stackPush()) {
+        PointerBuffer devices = getPhysicalDevices(stack);
+        for (int i = 0; i < devices.capacity(); i++) {
+            // Allocate on heap to avoid stack overflow
+            VkPhysicalDeviceProperties props = VkPhysicalDeviceProperties.calloc();
+            try {
                 vkGetPhysicalDeviceProperties(new VkPhysicalDevice(devices.get(i), instance), props);
                 System.out.println(props.deviceNameString());
                 physicalDevice = new VkPhysicalDevice(devices.get(i), instance);
                 break;
+            } finally {
+                props.free();
             }
         }
     }
+}
 
     //TODO: add nice queue creation system
     public void createDevice(List<String> extensions, List<String> layers, float[] queuePriorities, Consumer<VkPhysicalDeviceFeatures> deviceFeatures, List<Function<MemoryStack, Struct>> applicators) {
