@@ -67,38 +67,46 @@ public class VInitializer {
 
     //TODO: add nice queue creation system
     public void createDevice(List<String> extensions, List<String> layers, float[] queuePriorities, Consumer<VkPhysicalDeviceFeatures> deviceFeatures, List<Function<MemoryStack, Struct>> applicators) {
-        var deviceExtensions = new HashSet<>(getDeviceExtensionStrings(physicalDevice));
-        for (var extension : extensions) {
-            if (!deviceExtensions.contains(extension)) {
-                throw new IllegalStateException("Physical device is missing extension: " + extension);
-            }
+    var deviceExtensions = new HashSet<>(getDeviceExtensionStrings(physicalDevice));
+    for (var extension : extensions) {
+        if (!deviceExtensions.contains(extension)) {
+            throw new IllegalStateException("Physical device is missing extension: " + extension);
         }
+    }
 
-        try (MemoryStack stack = stackPush()) {
+    try (MemoryStack stack = stackPush()) {
+        queueCount = queuePriorities.length;
+        var queueCreateInfos = VkDeviceQueueCreateInfo.calloc(1, stack)
+                .sType$Default()
+                .pQueuePriorities(stack.floats(queuePriorities))
+                .queueFamilyIndex(0);
 
-            queueCount = queuePriorities.length;
-            var queueCreateInfos = VkDeviceQueueCreateInfo.calloc(1, stack)
-                    .sType$Default()
-                    .pQueuePriorities(stack.floats(queuePriorities))
-                    .queueFamilyIndex(0);
+        VkDeviceCreateInfo createInfo = VkDeviceCreateInfo.calloc(stack)
+                .sType$Default()
+                .ppEnabledExtensionNames(stack.pointers(extensions.stream().map(stack::UTF8).toArray(ByteBuffer[]::new)))
+                .ppEnabledLayerNames(stack.pointers(layers.stream().map(stack::UTF8).toArray(ByteBuffer[]::new)))
+                .pQueueCreateInfos(queueCreateInfos);
 
-            VkDeviceCreateInfo createInfo = VkDeviceCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .ppEnabledExtensionNames(stack.pointers(extensions.stream().map(stack::UTF8).toArray(ByteBuffer[]::new)))
-                    .ppEnabledLayerNames(stack.pointers(layers.stream().map(stack::UTF8).toArray(ByteBuffer[]::new)))
-                    .pQueueCreateInfos(queueCreateInfos);
-
-            if (deviceFeatures != null) {
-                var features = VkPhysicalDeviceFeatures.calloc(stack);
+        if (deviceFeatures != null) {
+            // Allocate on heap to avoid stack overflow
+            var features = VkPhysicalDeviceFeatures.calloc();
+            try {
                 deviceFeatures.accept(features);
                 createInfo.pEnabledFeatures(features);
-            } else {
-                createInfo.pEnabledFeatures(null);
+            } finally {
+                features.free();
             }
+        } else {
+            createInfo.pEnabledFeatures(null);
+        }
 
-            long chain = createInfo.address();
-            var deviceProperties2 = VkPhysicalDeviceFeatures2.calloc(stack).sType$Default();
+        long chain = createInfo.address();
+        // Allocate on heap to avoid stack overflow
+        var deviceProperties2 = VkPhysicalDeviceFeatures2.calloc();
+        try {
+            deviceProperties2.sType$Default();
             for (var applicator : applicators) {
+                // Allocate each feature struct on heap
                 Struct feature = applicator.apply(stack);
                 deviceProperties2.pNext(feature.address());
                 vkGetPhysicalDeviceFeatures2(physicalDevice, deviceProperties2);
@@ -106,13 +114,15 @@ public class VInitializer {
                 MemoryUtil.memPutAddress(chain+8, next);
                 chain = next;
             }
-
-            PointerBuffer pDevice = stack.callocPointer(1);
-            _CHECK_(vkCreateDevice(physicalDevice, createInfo, null, pDevice));
-            device = new VkDevice(pDevice.get(0), physicalDevice, createInfo);
+        } finally {
+            deviceProperties2.free();
         }
-    }
 
+        PointerBuffer pDevice = stack.callocPointer(1);
+        _CHECK_(vkCreateDevice(physicalDevice, createInfo, null, pDevice));
+        device = new VkDevice(pDevice.get(0), physicalDevice, createInfo);
+    }
+}
     private static VkLayerProperties.Buffer getInstanceLayers(MemoryStack stack) {
         int[] res = new int[1];
         _CHECK_(vkEnumerateInstanceLayerProperties(res, null));
