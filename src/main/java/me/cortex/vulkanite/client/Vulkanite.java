@@ -94,65 +94,57 @@ public class Vulkanite {
     public void destroy() {
         accelerationManager.cleanup();
     }
+  private static VContext createVulkanContext() {
+    var init = new VInitializer("Vulkan test", "Vulkanite", 1, 3,
+            new String[]{VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+                    VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
+                    VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
+                    VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
+            },
+            new String[] {
+            });
 
-    private static VContext createVulkanContext() {
-        var init = new VInitializer("Vulkan test", "Vulkanite", 1, 3,
-                new String[]{VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-                        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
-                        VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
-                        VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
-                        //VK_EXT_DEBUG_UTILS_EXTENSION_NAME
-                },
-                new String[] {
-                        //"VK_LAYER_KHRONOS_validation",
-                });
+    init.findPhysicalDevice();
 
-        //This copies whatever gpu the opengl context is on
-        init.findPhysicalDevice();//glGetString(GL_RENDERER).split("/")[0]
-
-        List<String> extensions = new ArrayList<>(List.of(
-                VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-                VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-                VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-                VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-                VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-                VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
-
-                //VK_KHR_RAY_QUERY_EXTENSION_NAME,
-
-                VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-                VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-
-                VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
-        ));
-        if (IS_WINDOWS) {
-            extensions.addAll(List.of(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
-                    VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
-                    VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME));
-        } else {
-            extensions.addAll(List.of(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
-                    VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,
-                    VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME));
-        }
-        init.createDevice(extensions,
-                List.of(),
-                new float[]{1.0f, 0.9f},
-                features -> features.shaderInt16(true).shaderInt64(true).multiDrawIndirect(true), List.of(
-                        stack-> VkPhysicalDeviceAccelerationStructureFeaturesKHR.calloc(stack)
-                                .sType$Default(),
-
-                        stack-> VkPhysicalDeviceRayTracingPipelineFeaturesKHR.calloc(stack)
-                                .sType$Default(),
-
-                        stack-> VkPhysicalDeviceVulkan11Features.calloc(stack)
-                                .sType$Default(),
-
-                        stack-> VkPhysicalDeviceVulkan12Features.calloc(stack)
-                                .sType$Default()
-                ));
-
-        return init.createContext();
+    List<String> extensions = new ArrayList<>(List.of(
+            VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+            VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
+            VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+            VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+            VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+            VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
+            VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+            VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+            VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
+    ));
+    if (IS_WINDOWS) {
+        extensions.addAll(List.of(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
+                VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
+                VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME));
+    } else {
+        extensions.addAll(List.of(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+                VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,
+                VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME));
     }
+    
+    // Allocate feature structs on heap to avoid stack overflow
+    init.createDevice(extensions,
+            List.of(),
+            new float[]{1.0f, 0.9f},
+            features -> features.shaderInt16(true).shaderInt64(true).multiDrawIndirect(true), 
+            List.of(
+                    stack -> VkPhysicalDeviceAccelerationStructureFeaturesKHR.calloc()
+                            .sType$Default(),
+                    stack -> VkPhysicalDeviceRayTracingPipelineFeaturesKHR.calloc()
+                            .sType$Default(),
+                    stack -> VkPhysicalDeviceVulkan11Features.calloc()
+                            .sType$Default(),
+                    stack -> VkPhysicalDeviceVulkan12Features.calloc()
+                            .sType$Default()
+            ));
+
+    return init.createContext();
+}
 
     public AccelerationManager getAccelerationManager() {
         return accelerationManager;
